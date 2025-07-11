@@ -34,9 +34,12 @@ with DAG(
         hook = HttpHook(method='GET', http_conn_id='nasa_api')
         response = hook.run(
             endpoint='planetary/apod',
-            params={"api_key": "{{ conn.nasa_api.extra_dejson.api_key }}"}
+            data={"api_key": "eXAs7zYVXDWMz77rQLWw340iaazt9Q3ASonmZ99b"}  
         )
         return response.json()
+
+
+
 
     @task
     def transform_apod_data(response):
@@ -64,4 +67,8 @@ with DAG(
         ))
 
     # Task chaining
-    create_table() >> load_data_to_postgres(transform_apod_data(extract_apod()))
+    extracted = extract_apod()
+    transformed = transform_apod_data(extracted)
+    loaded = load_data_to_postgres(transformed)
+
+    create_table() >> extracted
