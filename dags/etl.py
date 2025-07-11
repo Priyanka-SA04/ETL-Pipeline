@@ -1,16 +1,15 @@
+
 from airflow import DAG
 from airflow.decorators import task
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.http.hooks.http import HttpHook
-from airflow.utils.dates import days_ago
-##https://api.nasa.gov/planetary/apod?api_key=eXAs7zYVXDWMz77rQLWw340iaazt9Q3ASonmZ99b
+from datetime import datetime, timedelta
 
 with DAG(
     dag_id='nasa_apod_postgres',
-    start_date=days_ago(1),
+    start_date=datetime.now() - timedelta(days=1),
     schedule='@daily',
     catchup=False
-    
 ) as dag:
 
     @task
@@ -28,28 +27,26 @@ with DAG(
         """
         postgres_hook.run(create_table_query)
 
+
+    ##https://api.nasa.gov/planetary/apod?api_key=eXAs7zYVXDWMz77rQLWw340iaazt9Q3ASonmZ99b
     @task
     def extract_apod():
         hook = HttpHook(method='GET', http_conn_id='nasa_api')
         response = hook.run(
             endpoint='planetary/apod',
-            data=None,
-            extra_options={},
-            headers={},
             params={"api_key": "{{ conn.nasa_api.extra_dejson.api_key }}"}
         )
         return response.json()
 
     @task
     def transform_apod_data(response):
-        apod_data = {
+        return {
             'title': response.get('title', ''),
             'explanation': response.get('explanation', ''),
             'url': response.get('url', ''),
             'date': response.get('date', ''),
             'media_type': response.get('media_type', '')
         }
-        return apod_data
 
     @task
     def load_data_to_postgres(apod_data):
@@ -66,5 +63,5 @@ with DAG(
             apod_data['media_type']
         ))
 
-    # DAG execution chain
+    # Task chaining
     create_table() >> load_data_to_postgres(transform_apod_data(extract_apod()))
